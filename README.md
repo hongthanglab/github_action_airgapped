@@ -123,25 +123,6 @@ Mở rộng danh mục permissions và cấu hình chính xác như sau:
 
 ## 4. Thiết Lập Bảo Mật & K8s Secrets (Platform Repo)
 
-### Bước 4.1: Tạo Namespaces
-Chạy các lệnh kubectl sau trên cụm `K8s-Runner`:
-
-```bash
-# Namespace dành cho ARC Controller
-kubectl create namespace arc-systems
-
-# Namespace dành cho Runner Scale Set Pods
-kubectl create namespace arc-runners
-```
-
-Gán nhãn kiểm soát bảo mật Pod Security Standards (PSS) cấp `baseline` hoặc `restricted` cho namespace:
-```bash
-kubectl label namespace arc-systems pod-security.kubernetes.io/enforce=baseline
-kubectl label namespace arc-runners pod-security.kubernetes.io/enforce=baseline
-```
-
----
-
 ### Bước 4.2: Script khởi tạo K8s Secret chứa GitHub App Credentials
 
 #### File: `bootstrap/init-arc-secrets.sh`
@@ -161,6 +142,18 @@ GITHUB_APP_ID="1234567"                         # Thay bằng App ID ở Bước
 GITHUB_APP_INSTALLATION_ID="89101112"           # Thay bằng Installation ID ở Bước 2.5
 PRIVATE_KEY_PATH="./k8s-runner-arc-prod.private-key.pem"
 
+# Namespace dành cho ARC Controller
+kubectl create namespace arc-systems
+
+# Namespace dành cho Runner Scale Set Pods
+kubectl create namespace arc-runners
+```
+
+Gán nhãn kiểm soát bảo mật Pod Security Standards (PSS) cấp `baseline` hoặc `restricted` cho namespace:
+```bash
+kubectl label namespace arc-systems pod-security.kubernetes.io/enforce=baseline
+kubectl label namespace arc-runners pod-security.kubernetes.io/enforce=baseline
+
 if [ ! -f "$PRIVATE_KEY_PATH" ]; then
     echo "LỖI: Không tìm thấy file private key tại: $PRIVATE_KEY_PATH"
     exit 1
@@ -175,7 +168,6 @@ kubectl create secret generic "$SECRET_NAME" \
     --from-file=github_app_private_key="$PRIVATE_KEY_PATH" \
     --dry-run=client -o yaml | kubectl apply -f -
 
-echo "--> Đã tạo Secret thành công!"
 ```
 
 Cấp quyền thực thi và chạy script:
