@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: arc-runners-strict-security
+  namespace: arc-runners
+spec:
+  podSelector:
+    matchLabels:
+      actions.github.com/scale-set-name: k8s-runner-prod
+  policyTypes:
+    - Ingress
+    - Egress
+  # 1. Chặn toàn bộ kết nối đi vào (Ingress)
+  ingress: []
+  # 2. Kiểm soát kết nối đi ra (Egress)
+  egress:
+    # A. Cho phép truy vấn DNS đến CoreDNS trong cluster
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # B. Cho phép Egress ra Internet công cộng nhưng chặn Private CIDR và Cloud Metadata
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32   # Chặn AWS/GCP/Azure Instance Metadata
+              - 10.0.0.0/8           # Chặn dải IP VPC nội bộ K8s
+              - 172.16.0.0/12        # Chặn dải IP Pod CIDR nội bộ K8s
+              - 192.168.0.0/16       # Chặn dải IP mạng nội bộ on-premise

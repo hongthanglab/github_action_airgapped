@@ -1,0 +1,104 @@
+# Cấu hình giá trị cho chart local: ./charts/gha-runner-scale-set
+
+## URL của GitHub Organization
+githubConfigUrl: "https://github.com/<TÊN_ORGANIZATION>"
+
+## Tên Secret chứa thông tin GitHub App đã tạo ở Bước 4.2
+githubConfigSecret: "github-app-arc-secret"
+
+## Tên Runner Group đã tạo trên GitHub Organization
+runnerGroup: "production-runners"
+
+## Tên Scale Set (chính là giá trị runs-on mà workflow Dev sẽ gọi)
+runnerScaleSetName: "k8s-runner-prod"
+
+## Chiến lược Autoscaling: Warm Pool
+minRunners: 1
+maxRunners: 10
+
+## Cấu hình chi tiết Pod Template cho Runner và Docker Sidecar (DinD Rootless)
+template:
+  spec:
+    ## Tránh việc nhiều runner dồn vào 1 node gây nghẽn I/O và CPU
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: actions.github.com/scale-set-name
+                    operator: In
+                    values:
+                      - k8s-runner-prod
+              topologyKey: kubernetes.io/hostname
+
+    ## Thư mục dùng chung Unix Socket kết nối giữa Runner và Docker Daemon
+    volumes:
+      - name: docker-sock
+        emptyDir: {}
+      - name: docker-storage
+        emptyDir: {}
+
+    initContainers:
+      - name: socket-permission-fix
+        image: busybox:1.36
+        command: ["sh", "-c", "chmod 777 /var/run/docker"]
+        volumeMounts:
+          - name: docker-sock
+            mountPath: /var/run/docker
+
+    containers:
+      # ------------------------------------------------------------------------
+      # Container 1: GitHub Actions Runner (Official Image)
+      # ------------------------------------------------------------------------
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        env:
+          - name: DOCKER_HOST
+            value: "unix:///var/run/docker/docker.sock"
+        securityContext:
+          runAsUser: 1001
+          runAsGroup: 1001
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        volumeMounts:
+          - name: docker-sock
+            mountPath: /var/run/docker
+
+      # ------------------------------------------------------------------------
+      # Container 2: Rootless Docker-in-Docker Daemon (Sidecar)
+      # ------------------------------------------------------------------------
+      - name: dind
+        image: docker:27-dind-rootless
+        args:
+          - "--host=unix:///var/run/docker/docker.sock"
+          - "--storage-driver=overlay2"
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          runAsNonRoot: true
+          privileged: true # Privileged trong phạm vi User Namespace của rootless user
+        env:
+          - name: DOCKER_TLS_CERTDIR
+            value: ""
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        volumeMounts:
+          - name: docker-sock
+            mountPath: /var/run/docker
+          - name: docker-storage
+            mountPath: /home/rootless/.local/share/docker
