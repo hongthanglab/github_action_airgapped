@@ -39,9 +39,7 @@ deploy_controller() {
     helm upgrade --install arc-controller "$CHARTS_DIR/gha-runner-scale-set-controller" \
         --namespace arc-systems \
         --create-namespace \
-        -f "$ENV_DIR/arc-controller/values.yaml" \
-        --wait \
-        --timeout 5m
+        -f "$ENV_DIR/arc-controller/values.yaml"
 }
 
 deploy_runners() {
@@ -60,9 +58,7 @@ deploy_runners() {
     helm upgrade --install k8s-runner-prod "$CHARTS_DIR/gha-runner-scale-set" \
         --namespace arc-runners \
         --create-namespace \
-        -f "$ENV_DIR/arc-runner-scale-set/values.yaml" \
-        --wait \
-        --timeout 5m
+        -f "$ENV_DIR/arc-runner-scale-set/values.yaml" 
 }
 
 check_status() {
